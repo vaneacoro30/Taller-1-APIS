@@ -13,6 +13,15 @@ venv\Scripts\activate        # En Windows (PowerShell/CMD)
 pip install -r requirements.txt
 ```
 
+Copien `.env.example` a `.env` y completen los valores reales de `API_KEY` y
+`CLAVE_FIRMA` (`.env` está en `.gitignore`, no se versiona). Sin ese archivo el
+servicio no arranca: `config.py` los lee con `os.environ[...]` y falla rápido
+con un error claro si faltan, en vez de arrancar con secretos vacíos.
+
+```bash
+cp .env.example .env   # o copy .env.example .env  en Windows CMD
+```
+
 El modelo entrenado (`modelo.pkl`) viene en el repositorio y se carga una sola
 vez al iniciar el servicio.
 

@@ -40,12 +40,18 @@ def cargar_modelo():
 # del handler: así se deserializa una vez por proceso y no en cada petición.
 MODELO = cargar_modelo()
 
+# `EvaluadorRiesgo.historial` ahora es de instancia (H11: cada evaluador
+# guarda solo lo suyo), así que el histórico visible por /historial se
+# mantiene aquí, a nivel de aplicación, no en la clase de dominio.
+HISTORIAL: list = []
+
 
 @app.post("/score", response_model=RespuestaPuntuacion)
 async def score(solicitud: SolicitudPuntuacion):
     evaluador = EvaluadorRiesgo(solicitud.poliza)
     puntaje = evaluador.puntuar(MODELO, solicitud.model_dump())
     evaluador.anotar(puntaje)
+    HISTORIAL.append({"poliza": solicitud.poliza, "puntaje": puntaje})
     return RespuestaPuntuacion(
         poliza=solicitud.poliza,
         puntaje=puntaje,
@@ -55,7 +61,7 @@ async def score(solicitud: SolicitudPuntuacion):
 
 @app.get("/historial")
 async def historial():
-    return {"evaluaciones": EvaluadorRiesgo.historial}
+    return {"evaluaciones": HISTORIAL}
 
 
 @app.get("/siniestros/{id_siniestro}", response_model=Siniestro)
