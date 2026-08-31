@@ -7,19 +7,25 @@ declarado termine en un pago alto.
 ## Instalación
 
 ```bash
+python -m venv venv
+venv\Scripts\activate        # En Windows (PowerShell/CMD)
+# source venv/bin/activate   # En Linux/macOS
 pip install -r requirements.txt
 ```
 
-El modelo entrenado (`modelo.pkl`) viene en el repositorio.
+El modelo entrenado (`modelo.pkl`) viene en el repositorio y se carga una sola
+vez al iniciar el servicio.
 
 ## Puesta en marcha
 
 ```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
-El mismo comando sirve en el servidor de producción. `--reload` es cómodo
-porque recoge los cambios sin reiniciar a mano.
+Este es el arranque de producción: varios procesos (`--workers`) y **sin
+`--reload`**. La recarga en caliente (`--reload`) es solo para desarrollo local
+—vigila el sistema de archivos y reinicia ante cualquier cambio—, no está
+endurecida frente a un cliente hostil y no gestiona varios procesos.
 
 ## Endpoints
 
@@ -46,7 +52,13 @@ curl -X POST localhost:8000/score \
 {"poliza": "POL-2026-0413", "puntaje": 0.61, "alto_riesgo": false}
 ```
 
+Una entrada inválida (falta un campo, `monto` no positivo, `antiguedad`
+negativa) devuelve **422** con el detalle de validación, no 200 con un error en
+el cuerpo.
+
 ## Notas
 
-- La clave de la API está en `config.py` para que el equipo pueda probar sin configurar nada.
-- El histórico se exporta con `pickle`, que conserva los tipos de Python tal cual.
+- La configuración sensible (claves, secretos) se lee de variables de entorno, no
+  se versiona en el repositorio.
+- El histórico se exporta en **JSON** (`GET /exportar`), no con `pickle`.
+- `GET /health` responde 200 para comprobaciones de estado.

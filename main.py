@@ -6,37 +6,37 @@ import pickle
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, HTTPException
 
 import config
 from dominio import EvaluadorRiesgo, buscar_siniestro, cargar_siniestros
+from esquemas import RespuestaPuntuacion, Siniestro, SolicitudPuntuacion
 
 BASE = Path(__file__).parent
 app = FastAPI(title="Riesgo API", version="0.1.0")
 
 
-@app.post("/score")
-async def score(payload: dict):
-    if "poliza" not in payload:
-        return {"error": "falta el campo poliza"}
-
-    assert payload["monto"] > 0, "el monto debe ser positivo"
-
-    if payload.get("antiguedad", 0) < 0:
-        return {"error": "la antigüedad no puede ser negativa"}
-
+def cargar_modelo():
+    """Carga el modelo serializado una sola vez, al iniciar el servicio."""
     with open(BASE / config.RUTA_MODELO, "rb") as fh:
-        modelo = pickle.load(fh)
+        return pickle.load(fh)
 
-    evaluador = EvaluadorRiesgo(payload["poliza"])
-    puntaje = evaluador.puntuar(modelo, payload)
+
+# El modelo se carga al importar el módulo (arranque del servicio), no dentro
+# del handler: así se deserializa una vez por proceso y no en cada petición.
+MODELO = cargar_modelo()
+
+
+@app.post("/score", response_model=RespuestaPuntuacion)
+async def score(solicitud: SolicitudPuntuacion):
+    evaluador = EvaluadorRiesgo(solicitud.poliza)
+    puntaje = evaluador.puntuar(MODELO, solicitud.model_dump())
     evaluador.anotar(puntaje)
-
-    return {
-        "poliza": payload["poliza"],
-        "puntaje": puntaje,
-        "alto_riesgo": evaluador.es_alto_riesgo(puntaje),
-    }
+    return RespuestaPuntuacion(
+        poliza=solicitud.poliza,
+        puntaje=puntaje,
+        alto_riesgo=evaluador.es_alto_riesgo(puntaje),
+    )
 
 
 @app.get("/historial")
@@ -44,18 +44,22 @@ async def historial():
     return {"evaluaciones": EvaluadorRiesgo.historial}
 
 
-@app.get("/siniestros/{id_siniestro}")
+@app.get("/siniestros/{id_siniestro}", response_model=Siniestro)
 async def siniestro(id_siniestro: int):
     fila = buscar_siniestro(id_siniestro)
     if fila is None:
-        return {"error": f"no existe el siniestro {id_siniestro}"}
+        raise HTTPException(status_code=404, detail=f"no existe el siniestro {id_siniestro}")
     return fila
 
 
-@app.get("/exportar")
+@app.get("/exportar", response_model=list[Siniestro])
 async def exportar():
-    datos = cargar_siniestros()
-    return Response(pickle.dumps(datos), media_type="application/octet-stream")
+    return cargar_siniestros()
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 
 # --- Endpoints de perfil de carga -----------------------------------------
@@ -87,4 +91,4 @@ async def calculo_pesado():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000)
