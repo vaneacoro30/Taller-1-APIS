@@ -1,0 +1,9 @@
+endpoint,clasificacion,decision,concurrencia,peticiones,tiempo_total_s,p50_ms,p95_ms
+/ping,,,1,50,0.092,1.5,3.1
+/ping,,,20,50,2.11,1.9,2059.6
+/consulta-archivo,,,1,50,0.109,1.9,3.1
+/consulta-archivo,,,20,50,2.113,2.2,2088.5
+/servicio-externo,,,1,50,15.202,304.0,305.0
+/servicio-externo,,,20,50,15.153,3631.4,14394.6
+/calculo-pesado,,,1,50,13.547,263.6,298.4
+/calculo-pesado,,,20,50,13.66,3258.2,12990.2

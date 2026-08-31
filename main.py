@@ -2,18 +2,32 @@
 riesgo-api-v0 — Servicio de puntuación de siniestros.
 Aseguradora Santo Tomás · prototipo interno.
 """
+import asyncio
 import pickle
-import time
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 
+import computo
 import config
 from dominio import EvaluadorRiesgo, buscar_siniestro, cargar_siniestros
 from esquemas import RespuestaPuntuacion, Siniestro, SolicitudPuntuacion
 
 BASE = Path(__file__).parent
 app = FastAPI(title="Riesgo API", version="0.1.0")
+
+# Pool de procesos para el trabajo CPU-bound de /calculo-pesado. Se crea de
+# forma perezosa en la primera petición (no al importar) para que los procesos
+# hijos que arranca no vuelvan a ejecutar este módulo en cascada en Windows.
+_pool_cpu = None
+
+
+def _pool() -> ProcessPoolExecutor:
+    global _pool_cpu
+    if _pool_cpu is None:
+        _pool_cpu = ProcessPoolExecutor(max_workers=4)
+    return _pool_cpu
 
 
 def cargar_modelo():
@@ -70,23 +84,31 @@ async def ping():
 
 
 @app.get("/consulta-archivo")
-async def consulta_archivo():
+def consulta_archivo():
+    # IO-bound con lectura de archivo síncrona (open/read_text). Se declara con
+    # `def` para que FastAPI lo ejecute en su threadpool y no bloquee el event
+    # loop; `await` no aplica porque `read_text` no es asíncrono.
     contenido = (BASE / config.RUTA_DATOS).read_text(encoding="utf-8")
     return {"lineas": len(contenido.splitlines())}
 
 
 @app.get("/servicio-externo")
 async def servicio_externo():
-    time.sleep(0.3)
+    # IO-bound (espera de red simulada). Se usa `await asyncio.sleep`, que cede
+    # el control del event loop mientras espera, en vez de `time.sleep`, que lo
+    # bloquea. En producción, la llamada real iría con httpx.AsyncClient.
+    await asyncio.sleep(0.3)
     return {"tarifa_referencia": 1.18}
 
 
 @app.get("/calculo-pesado")
 async def calculo_pesado():
-    total = 0.0
-    for i in range(3_000_000):
-        total += (i % 7) ** 0.5
-    return {"total": round(total, 2)}
+    # CPU-bound: se descarga en un ProcessPoolExecutor con run_in_executor para
+    # aprovechar varios núcleos y no bloquear el event loop. Un threadpool (def)
+    # no bastaría: el GIL serializa el cálculo entre hilos.
+    loop = asyncio.get_running_loop()
+    total = await loop.run_in_executor(_pool(), computo.reserva_agregada)
+    return {"total": total}
 
 
 if __name__ == "__main__":

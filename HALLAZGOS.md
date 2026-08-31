@@ -48,10 +48,66 @@
 > Un párrafo por endpoint. Expliquen **los tiempos que ustedes obtuvieron**, no la
 > teoría general. Si un resultado los sorprendió, dígan­lo: eso se premia.
 
+**Nota de método.** Todas las mediciones se tomaron con **un solo worker** de
+uvicorn (`--workers 1`). Es deliberado: con varios workers el sistema operativo
+reparte las peticiones entre procesos y **oculta** el efecto de cómo está
+declarado el handler, que es justo lo que esta parte evalúa. Con un worker se ve
+si el handler bloquea o no el event loop. No se modificó `medir.py`. Los números
+del estado semilla (antes de corregir) están en `MEDICIONES_semilla.csv`; los del
+estado corregido, en `MEDICIONES.csv`. Máquina: 4 núcleos lógicos.
+
 ## `/ping`
+
+Clasificación **trivial**, decisión **`async def`**. Devuelve una constante sin
+tocar disco, red ni CPU, así que nunca bloquea el event loop: `async def` es
+adecuado y evita el salto al threadpool que impondría `def`. Medido: p50 de
+**1.2 ms** a concurrencia 1 y **1.8 ms** a concurrencia 20 — instantáneo en ambos
+casos. El `tiempo_total` (2.07 s) y el p95 (~2.06 s) a concurrencia 20 no vienen
+del handler sino de abrir 20 conexiones TCP nuevas de golpe contra `localhost`;
+el p50 de 1.8 ms lo confirma: la enorme mayoría responde al instante y solo un par
+de conexiones nuevas pagan ese arranque. Mismo patrón aparece en `/consulta-archivo`,
+lo que reafirma que es un costo del cliente, no del endpoint.
 
 ## `/consulta-archivo`
 
+Clasificación **IO-bound**, decisión **`def`**. Lee un archivo con
+`open()`/`read_text`, que es I/O **síncrona**; declararlo `def` hace que FastAPI lo
+ejecute en su threadpool y no bloquee el event loop (no cabe `await`, porque
+`read_text` no es asíncrono). Aquí está la sorpresa que solo se ve midiendo: pasar
+el handler de `async def` (semilla) a `def` **no cambió los números** — p50 de
+**2.2 ms** (async, semilla) frente a **2.3 ms** (`def`) a concurrencia 20, dentro
+del ruido. El archivo son 400 filas (~13 KB): leerlo tarda microsegundos, así que
+bloquear o no el loop durante ese instante es irrelevante. La clasificación dice
+"es I/O, cuida el bloqueo", pero la medición dice que **en este caso da
+exactamente igual**. La decisión `def` se justifica por principio (sería lo
+correcto si el archivo creciera), no por los números de hoy.
+
 ## `/servicio-externo`
 
+Clasificación **IO-bound**, decisión **`async def`** (con `await asyncio.sleep`).
+La regla "I/O va con async" es correcta aquí, pero **solo si se espera de verdad
+sin bloquear**. La versión semilla era `async def` + `time.sleep(0.3)`: parecía
+async pero `time.sleep` bloquea el event loop, y la medición lo delata — a
+concurrencia 20 tardaba **15.15 s** (igual que a concurrencia 1) con p95 de
+**14.4 s**. Al cambiar `time.sleep` por `await asyncio.sleep`, el loop cede el
+control durante la espera y atiende las 20 en paralelo: el `tiempo_total` a
+concurrencia 20 cayó de **15.15 s a 2.99 s**. A concurrencia 1 no hay diferencia
+(15.65 s ≈ 50 × 0.3 s): sin concurrencia no hay nada que solapar. Es la trampa
+"seguir la regla da peor": poner `async def` sin `await` real no escala; hay que
+awaitar (o, con un cliente síncrono, usar `def` para el threadpool).
+
 ## `/calculo-pesado`
+
+Clasificación **CPU-bound**, decisión **`async def + executor`**
+(`ProcessPoolExecutor` de 4 procesos). El cálculo (3M iteraciones, ~0.3 s) es puro
+CPU. En `async def` puro (semilla) bloquea el event loop: a concurrencia 20
+tardaba **13.66 s**, igual que a concurrencia 1, con p95 de **13 s**. Un threadpool
+(`def`) tampoco ayudaría: el GIL serializa el cómputo entre hilos. Descargándolo a
+un `ProcessPoolExecutor`, cada proceso corre en su núcleo y el `tiempo_total` a
+concurrencia 20 bajó de **13.66 s a 9.64 s**, y el p95 de 13 s a **5.3 s**. La
+mejora es real pero **no 4×**: la máquina tiene 4 núcleos lógicos (≈2 físicos con
+hyperthreading, que el trabajo CPU aprovecha poco) y el pool paga el costo de
+serializar tarea y resultado entre procesos. Ese costo se ve claro a concurrencia
+1, donde el pool va **peor** que la semilla (15.77 s frente a 13.55 s): sin
+concurrencia que explotar, mover el trabajo a otro proceso es solo overhead. El
+executor paga cuando hay peticiones simultáneas, no antes.
