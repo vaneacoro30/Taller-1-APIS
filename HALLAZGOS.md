@@ -13,12 +13,7 @@
 | ID | Síntoma observable | Causa | Módulo · Sección | SHA donde se observa | Comando de evidencia | Salida obtenida | Corrección aplicada |
 |----|--------------------|-------|------------------|----------------------|----------------------|-----------------|---------------------|
 | H1 | *(ejemplo de FORMATO, no un defecto de este repositorio)* `GET /ping` responde sin cabecera `Cache-Control` | El handler no declara política de caché | M2 · 2. El protocolo HTTP y la autenticación | `v0-semilla` | `curl -sI localhost:8000/ping \| grep -ci cache-control` | `0` | Se añade la cabecera en la respuesta |
-| H2 | `config.py` trae `API_KEY` y `CLAVE_FIRMA` escritos en texto plano y quedan versionados en git; el `.gitignore` solo excluye `*.pyc`, así que ni un `.env` con esas mismas claves quedaría protegido | Los secretos se dejaron hardcodeados en el módulo de configuración en lugar de leerse de variables de entorno, y el `.gitignore` nunca se amplió para excluir archivos de credenciales | M1 · 5. Git y GitHub para investigadores (Material de Clase) | `6a91db1` | `grep -n "API_KEY\|CLAVE_FIRMA" config.py` | `4:API_KEY = "sk-riesgo-2026-9f3a1c7b4e21"`<br>`5:CLAVE_FIRMA = "aseguradora-santo-tomas-2026"` | *(pendiente — se llena en la Parte B)* |
-| H3 | | | | | | | |
-| H4 | | | | | | | |
-| H5 | | | | | | | |
-| H6 | | | | | | | |
-| H7 | | | | | | | |
+| H8 | `config.py` trae `API_KEY` y `CLAVE_FIRMA` escritos en texto plano y quedan versionados en git; el `.gitignore` solo excluye `*.pyc`, así que ni un `.env` con esas mismas claves quedaría protegido | Los secretos se dejaron hardcodeados en el módulo de configuración en lugar de leerse de variables de entorno, y el `.gitignore` nunca se amplió para excluir archivos de credenciales | M1 · 5. Git y GitHub para investigadores (Material de Clase) | `6a91db1` | `grep -n "API_KEY\|CLAVE_FIRMA" config.py` | `4:API_KEY = "sk-riesgo-2026-9f3a1c7b4e21"`<br>`5:CLAVE_FIRMA = "aseguradora-santo-tomas-2026"` | *(pendiente — se llena en la Parte B)* |
 
 
 **Reglas que se verifican automáticamente:**
