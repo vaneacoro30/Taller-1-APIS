@@ -11,6 +11,9 @@
 | # | Parte | Quién | Prompt (resumido si es largo) |
 |---|-------|-------|-------------------------------|
 | 1 | A | Vanessa | Evalúa este código y dime qué errores observas que tiene, teniendo en cuenta las buenas prácticas en código |
+| 2 | A | Mateo | Clonar el repositorio semilla, crear el entorno virtual, instalar dependencias y levantar el servicio para confirmar que arranca según el README |
+| 3 | A | Mateo | Leer ENUNCIADO.md y el material de los módulos 1–5 del curso para identificar los defectos del servicio y proponer cómo dividir el trabajo de diagnóstico con la compañera de grupo |
+| 4 | A / C / D | Mateo | Validar contra el código real y las secciones exactas del material del curso los 11 hallazgos, los 3 candidatos de la Parte C y los 3 defectos de `ia_propuesta.py` que había encontrado Vanessa |
 
 ## Aceptado
 
