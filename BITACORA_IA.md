@@ -11,6 +11,7 @@
 | # | Parte | Quién | Prompt (resumido si es largo) |
 |---|-------|-------|-------------------------------|
 | 1 | A | Vanessa | Evalúa este código y dime qué errores observas que tiene, teniendo en cuenta las buenas prácticas en código |
+| 2 | A | Vanessa | ¿Cuál es la diferencia entre usar el SHA `6a91db1` directo o crear el tag `v0-semilla` para documentar el hallazgo en HALLAZGOS.md? |
 
 ## Aceptado
 
@@ -22,4 +23,4 @@
 
 | # | Qué propuso la IA | Por qué lo rechazamos | Qué hicimos en su lugar |
 |---|-------------------|-----------------------|-------------------------|
-| 1 | | | |
+| 1 | Crear el tag `v0-semilla` apuntando al commit semilla para citar la etiqueta tal como la nombra el enunciado | El enunciado permite usar el SHA directamente cuando el tag no existe, y crear el tag ahora sería artificial: se supone que marca el estado "tal como se lo entregamos", no algo agregado después. Tampoco aporta nada distinto a nivel funcional | Usamos el SHA `6a91db1` directamente en la tabla de HALLAZGOS.md, como permite el enunciado |
