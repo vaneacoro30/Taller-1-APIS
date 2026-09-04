@@ -11,8 +11,18 @@ from fastapi import FastAPI, HTTPException
 
 import computo
 import config
-from dominio import EvaluadorRiesgo, buscar_siniestro, cargar_siniestros
-from esquemas import RespuestaPuntuacion, Siniestro, SolicitudPuntuacion
+from dominio import EvaluadorRiesgo, RepositorioHistorial, buscar_siniestro, cargar_siniestros
+from esquemas import (
+    ConteoLineas,
+    Estado,
+    Pong,
+    RespuestaHistorial,
+    RespuestaPuntuacion,
+    ResultadoCalculo,
+    Siniestro,
+    SolicitudPuntuacion,
+    TarifaReferencia,
+)
 
 BASE = Path(__file__).parent
 app = FastAPI(title="Riesgo API", version="0.1.0")
@@ -41,17 +51,21 @@ def cargar_modelo():
 MODELO = cargar_modelo()
 
 # `EvaluadorRiesgo.historial` ahora es de instancia (H11: cada evaluador
-# guarda solo lo suyo), así que el histórico visible por /historial se
-# mantiene aquí, a nivel de aplicación, no en la clase de dominio.
-HISTORIAL: list = []
+# guarda solo lo suyo); el histórico visible por /historial vive en este
+# repositorio compartido, inyectado como colaborador OPCIONAL —el contrato
+# sigue permitiendo `EvaluadorRiesgo(poliza)` solo con la póliza.
+# Nota: sigue siendo estado en memoria por proceso, así que con --workers > 1
+# cada worker ve solo lo que él mismo anotó. Para un historial realmente
+# compartido entre procesos haría falta un almacén externo (BD/Redis); fuera
+# del alcance de este taller, pero es una limitación conocida, no ignorada.
+REPOSITORIO_HISTORIAL = RepositorioHistorial()
 
 
 @app.post("/score", response_model=RespuestaPuntuacion)
 async def score(solicitud: SolicitudPuntuacion):
-    evaluador = EvaluadorRiesgo(solicitud.poliza)
+    evaluador = EvaluadorRiesgo(solicitud.poliza, repositorio=REPOSITORIO_HISTORIAL)
     puntaje = evaluador.puntuar(MODELO, solicitud.model_dump())
     evaluador.anotar(puntaje)
-    HISTORIAL.append({"poliza": solicitud.poliza, "puntaje": puntaje})
     return RespuestaPuntuacion(
         poliza=solicitud.poliza,
         puntaje=puntaje,
@@ -59,9 +73,9 @@ async def score(solicitud: SolicitudPuntuacion):
     )
 
 
-@app.get("/historial")
+@app.get("/historial", response_model=RespuestaHistorial)
 async def historial():
-    return {"evaluaciones": HISTORIAL}
+    return RespuestaHistorial(evaluaciones=REPOSITORIO_HISTORIAL.todos())
 
 
 @app.get("/siniestros/{id_siniestro}", response_model=Siniestro)
@@ -77,46 +91,46 @@ async def exportar():
     return cargar_siniestros()
 
 
-@app.get("/health")
+@app.get("/health", response_model=Estado)
 async def health():
-    return {"status": "ok"}
+    return Estado(status="ok")
 
 
 # --- Endpoints de perfil de carga -----------------------------------------
 
-@app.get("/ping")
+@app.get("/ping", response_model=Pong)
 async def ping():
-    return {"pong": True}
+    return Pong(pong=True)
 
 
-@app.get("/consulta-archivo")
+@app.get("/consulta-archivo", response_model=ConteoLineas)
 def consulta_archivo():
     # IO-bound con lectura de archivo síncrona (open/read_text). Se declara con
     # `def` para que FastAPI lo ejecute en su threadpool y no bloquee el event
     # loop; `await` no aplica porque `read_text` no es asíncrono.
     contenido = (BASE / config.RUTA_DATOS).read_text(encoding="utf-8")
-    return {"lineas": len(contenido.splitlines())}
+    return ConteoLineas(lineas=len(contenido.splitlines()))
 
 
-@app.get("/servicio-externo")
+@app.get("/servicio-externo", response_model=TarifaReferencia)
 async def servicio_externo():
     # IO-bound (espera de red simulada). Se usa `await asyncio.sleep`, que cede
     # el control del event loop mientras espera, en vez de `time.sleep`, que lo
     # bloquea. En producción, la llamada real iría con httpx.AsyncClient.
     await asyncio.sleep(0.3)
-    return {"tarifa_referencia": 1.18}
+    return TarifaReferencia(tarifa_referencia=1.18)
 
 
-@app.get("/calculo-pesado")
+@app.get("/calculo-pesado", response_model=ResultadoCalculo)
 async def calculo_pesado():
     # CPU-bound: se descarga en un ProcessPoolExecutor con run_in_executor para
     # aprovechar varios núcleos y no bloquear el event loop. Un threadpool (def)
     # no bastaría: el GIL serializa el cálculo entre hilos.
     loop = asyncio.get_running_loop()
     total = await loop.run_in_executor(_pool(), computo.reserva_agregada)
-    return {"total": total}
+    return ResultadoCalculo(total=total)
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, workers=4)

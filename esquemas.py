@@ -44,3 +44,44 @@ class Siniestro(BaseModel):
     antiguedad: int
     siniestros_previos: int
     pago_alto: int
+
+
+class Evaluacion(BaseModel):
+    """Una entrada del historial (salida de /historial)."""
+
+    poliza: str
+    puntaje: float
+
+
+class RespuestaHistorial(BaseModel):
+    evaluaciones: list[Evaluacion]
+
+
+class Estado(BaseModel):
+    """Salida de /health."""
+
+    status: str
+
+
+class Pong(BaseModel):
+    """Salida de /ping."""
+
+    pong: bool
+
+
+class ConteoLineas(BaseModel):
+    """Salida de /consulta-archivo."""
+
+    lineas: int
+
+
+class TarifaReferencia(BaseModel):
+    """Salida de /servicio-externo."""
+
+    tarifa_referencia: float
+
+
+class ResultadoCalculo(BaseModel):
+    """Salida de /calculo-pesado."""
+
+    total: float

@@ -14,9 +14,10 @@ pip install -r requirements.txt
 ```
 
 Copien `.env.example` a `.env` y completen los valores reales de `API_KEY` y
-`CLAVE_FIRMA` (`.env` está en `.gitignore`, no se versiona). Sin ese archivo el
-servicio no arranca: `config.py` los lee con `os.environ[...]` y falla rápido
-con un error claro si faltan, en vez de arrancar con secretos vacíos.
+`CLAVE_FIRMA` (`.env` está en `.gitignore`, no se versiona). El servicio arranca
+igual sin ese archivo —`config.py` los lee con `os.getenv(...)`, nunca con un
+secreto hardcodeado— pero crearlo es buena práctica para cuando esas variables
+se conecten a lógica real.
 
 ```bash
 cp .env.example .env   # o copy .env.example .env  en Windows CMD
